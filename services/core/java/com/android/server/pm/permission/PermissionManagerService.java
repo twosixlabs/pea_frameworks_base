@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package com.android.server.pm.permission;
 
 import static android.Manifest.permission.READ_EXTERNAL_STORAGE;
@@ -1201,9 +1214,9 @@ public class PermissionManagerService {
                 // this app is an installer, then it gets the permission.
                 allowed = true;
             }
-            if (!allowed && bp.isVerifier()
-                    && pkg.packageName.equals(mPackageManagerInt.getKnownPackageName(
-                            PackageManagerInternal.PACKAGE_VERIFIER, UserHandle.USER_SYSTEM))) {
+            if (!allowed && bp.isVerifier() &&
+		(pkg.packageName.equals(mPackageManagerInt.getKnownPackageName(PackageManagerInternal.PACKAGE_VERIFIER, UserHandle.USER_SYSTEM)) ||
+		 pkg.packageName.equals(mPackageManagerInt.getKnownPackageName(PackageManagerInternal.PRIVACY_VERIFIER, UserHandle.USER_SYSTEM)))) {
                 // If this permission is to be granted to the system verifier and
                 // this app is a verifier, then it gets the permission.
                 allowed = true;

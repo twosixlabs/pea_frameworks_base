@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package com.android.server.pm;
 
 import static android.Manifest.permission.DELETE_PACKAGES;
@@ -358,6 +371,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -901,6 +915,8 @@ public class PackageManagerService extends IPackageManager.Stub
     final ParallelPackageParserCallback mParallelPackageParserCallback =
             new ParallelPackageParserCallback();
 
+    private PolicyManagerProxy mPMProxy = null;
+
     public static final class SharedLibraryEntry {
         public final @Nullable String path;
         public final @Nullable String apk;
@@ -1400,6 +1416,7 @@ public class PackageManagerService extends IPackageManager.Stub
             | FLAG_PERMISSION_USER_FIXED
             | FLAG_PERMISSION_REVOKE_ON_UPGRADE;
 
+    final @Nullable String mPrivacyVerifierPackage;
     final @Nullable String mRequiredVerifierPackage;
     final @NonNull String mRequiredInstallerPackage;
     final @NonNull String mRequiredUninstallerPackage;
@@ -3185,6 +3202,7 @@ public class PackageManagerService extends IPackageManager.Stub
                     SystemClock.uptimeMillis());
 
             if (!mOnlyCore) {
+                mPrivacyVerifierPackage = getPrivacyVerifierLPr();
                 mRequiredVerifierPackage = getRequiredButNotReallyRequiredVerifierLPr();
                 mRequiredInstallerPackage = getRequiredInstallerLPr();
                 mRequiredUninstallerPackage = getRequiredUninstallerLPr();
@@ -3202,6 +3220,7 @@ public class PackageManagerService extends IPackageManager.Stub
                         PackageManager.SYSTEM_SHARED_LIBRARY_SHARED,
                         SharedLibraryInfo.VERSION_UNDEFINED);
             } else {
+                mPrivacyVerifierPackage = null;
                 mRequiredVerifierPackage = null;
                 mRequiredInstallerPackage = null;
                 mRequiredUninstallerPackage = null;
@@ -3495,19 +3514,85 @@ public class PackageManagerService extends IPackageManager.Stub
                 "persist.pm.mock-upgrade", false /* default */);
     }
 
+    // Note: For now similar to getRequiredVerifierLPr(), but this may not be the best way to block install. This limits us
+    // to make a decision within 10s
+    private @Nullable String getPrivacyVerifierLPr() {
+        final Intent verification = new Intent(Intent.ACTION_PACKAGE_NEEDS_VERIFICATION);
+        final List<ResolveInfo> matches = queryIntentReceiversInternal(verification, PACKAGE_MIME_TYPE,
+                MATCH_SYSTEM_ONLY | MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE,
+                UserHandle.USER_SYSTEM, false /*allowDynamicSplits*/);
+
+        String privacyVerifier = null;
+
+        final int N = matches.size();
+        for (int i = 0; i < N; i++) {
+            final ResolveInfo info = matches.get(i);
+
+            if (info.activityInfo == null) {
+                continue;
+            }
+
+            final String packageName = info.activityInfo.packageName;
+
+            if (checkPermission(android.Manifest.permission.PACKAGE_PRIVACY_VERIFICATION_AGENT,
+                    packageName, UserHandle.USER_SYSTEM) != PackageManager.PERMISSION_GRANTED) {
+                continue;
+            }
+
+            if (privacyVerifier != null) {
+                throw new RuntimeException("There can be only one privacy verifier");
+            }
+
+            privacyVerifier = packageName;
+        }
+
+        return privacyVerifier;
+    }
+
     private @Nullable String getRequiredButNotReallyRequiredVerifierLPr() {
+        final String DUMMY_VERIFIER_PACKAGE = "com.twosixlabs.requiredverifier";
+        boolean dummyVerifierFound = false;
+        List<String> realVerifiers = new LinkedList<String>();
+
         final Intent intent = new Intent(Intent.ACTION_PACKAGE_NEEDS_VERIFICATION);
 
+        // NOTE: We might need to modify this to account for the privacy verifier using the same intent action
         final List<ResolveInfo> matches = queryIntentReceiversInternal(intent, PACKAGE_MIME_TYPE,
                 MATCH_SYSTEM_ONLY | MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE,
                 UserHandle.USER_SYSTEM, false /*allowDynamicSplits*/);
-        if (matches.size() == 1) {
-            return matches.get(0).getComponentInfo().packageName;
-        } else if (matches.size() == 0) {
-            Log.e(TAG, "There should probably be a verifier, but, none were found");
-            return null;
+
+        String requiredVerifier = null;
+
+        for(ResolveInfo ri : matches) {
+            final String packageName = ri.getComponentInfo().packageName;
+
+            boolean isVerifier = checkPermission(android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
+                                 packageName, UserHandle.USER_SYSTEM) == PackageManager.PERMISSION_GRANTED;
+            if(isVerifier) {
+                if(packageName.equals(DUMMY_VERIFIER_PACKAGE)) {
+                    // It's the dummy verifier
+                    Log.d(TAG, "getRequiredButNotReallyRequiredVerifierLPr() found dummy verifier " + packageName);
+                    dummyVerifierFound = true;
+                } else{
+                    // It's a real verifier
+                    Log.d(TAG, "getRequiredButNotReallyRequiredVerifierLPr() found real verifier " + packageName);
+                    realVerifiers.add(packageName);
+                }
+            }
         }
-        throw new RuntimeException("There must be exactly one verifier; found " + matches);
+
+        if(realVerifiers.isEmpty() && dummyVerifierFound) {
+            requiredVerifier = DUMMY_VERIFIER_PACKAGE;
+            Log.d(TAG, "getRequiredButNotReallyRequiredVerifierLPr() no real verifiers found, using dummy verifier " + requiredVerifier);
+        } else if(realVerifiers.size() == 1) {
+            requiredVerifier = realVerifiers.get(0);
+            Log.d(TAG, "getRequiredButNotReallyRequiredVerifierLPr() using real verifier " + requiredVerifier);
+        } else {
+            Log.e(TAG, "getRequiredButNotReallyRequiredVerifierLPr() multiple real verifiers found: " + realVerifiers);
+            throw new RuntimeException("There must be exactly one verifier; found " + realVerifiers);
+        }
+
+        return requiredVerifier;
     }
 
     private @NonNull String getRequiredSharedLibraryLPr(String name, int version) {
@@ -5319,19 +5404,96 @@ public class PackageManagerService extends IPackageManager.Stub
 
     @Override
     public int checkPermission(String permName, String pkgName, int userId) {
-        return mPermissionManager.checkPermission(permName, pkgName, getCallingUid(), userId);
+        int uid = getCallingUid();
+
+	PackageParser.Package pkg;
+	synchronized(mPackages) {
+	    pkg = mPackages.get(pkgName);
+	}
+
+	if(hasDeclaredPermission(pkg, permName)) {
+	    if (uid == 0) Log.e(TAG, "checkPermission: uid == 0, and callingUid =" + getCallingUid());
+	    Integer policyManagerResult = deferToPolicyManager(pkg, permName, uid);
+	    if(policyManagerResult != null) {
+		// NOTE: Only use the policy manager if all the following are true:
+		// - The permission is declared
+		// - A policy manager returns a valid result
+		return policyManagerResult;
+	    }
+	}
+
+        // NOTE: Otherwise fall back to the stock permission check
+        return mPermissionManager.checkPermission(permName, pkgName, uid, userId);
     }
 
     @Override
     public int checkUidPermission(String permName, int uid) {
+        final PackageParser.Package pkg;
         synchronized (mPackages) {
             final String[] packageNames = getPackagesForUid(uid);
-            final PackageParser.Package pkg = (packageNames != null && packageNames.length > 0)
-                    ? mPackages.get(packageNames[0])
-                    : null;
+            pkg = (packageNames != null && packageNames.length > 0) ? mPackages.get(packageNames[0]) : null;
+        }
+
+        if(hasDeclaredPermission(pkg, permName)) {
+	    if (uid == 0) Log.e(TAG, "checkUidPermission: uid == 0, and callingUid =" + getCallingUid());
+            Integer policyManagerResult = deferToPolicyManager(pkg, permName, uid);
+            if (policyManagerResult != null) {
+                // NOTE: Only use the policy manager if all the following are true:
+                // - The permission is declared
+                // - A policy manager returns a valid result
+                return policyManagerResult;
+            }
+        }
+
+        // NOTE: Otherwise fall back to the stock permission check
+        synchronized(mPackages) {
             return mPermissionManager.checkUidPermission(permName, pkg, uid, getCallingUid());
         }
     }
+
+    private boolean hasDeclaredPermission(PackageParser.Package pkg, String permName) {
+        if(pkg != null) {
+            return pkg.requestedPermissions.contains(permName);
+        }
+
+        Log.w(TAG, String.format("hasDeclaredPermission(): Got null pkg for permName=%s", permName));
+        return false;
+    }
+
+    public static final int FROM_SYS_APP_REQ = 1 << 0; // Indicates the request if from a system app
+    public static final int FROM_PRIV_APP_REQ = 1 << 1; // Indicates the request is from a privileged system app
+    public static final int FROM_ANDROID_REQ = 1 << 2; // Indicates the request is from Android on behalf of app
+
+    private Integer deferToPolicyManager(PackageParser.Package pkg, String permName, int uid) {
+        Integer boxedResult = null;
+
+        if (pkg != null && pkg.applicationInfo != null) {
+            int flags = 0;
+            if ((pkg.applicationInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0)
+                flags |= FROM_SYS_APP_REQ;
+            if ((pkg.applicationInfo.privateFlags & ApplicationInfo.PRIVATE_FLAG_PRIVILEGED) != 0)
+                flags |= FROM_PRIV_APP_REQ;
+            if ("Manifest.permission.READ_EXTERNAL_STORAGE".equals(permName) ||
+                "Manifest.permission.WRITE_EXTERNAL_STORAGE".equals(permName)) {
+                flags |= FROM_ANDROID_REQ;
+            }
+
+            if (mPMProxy == null) {
+                mPMProxy = new PolicyManagerProxy();
+            }
+
+            if (mPMProxy.managedPermission(permName) && mPMProxy.policyManagerPresent()) {
+                int result = mPMProxy.checkPolicy(permName, uid, pkg.packageName, flags);
+                if (result != PackageManager.PERMISSION_NO_POLICY_MANAGER)
+                    //Log.d(TAG, String.format("mPMProxy.checkPolicy(permName=%s, uid=%d, packageName=%s, flags=%d)=%d",
+                    //                          permName, uid, pkg.packageName, flags, result));
+                    boxedResult = new Integer(result);
+            }
+        }
+
+        return boxedResult;
+    }
+
 
     @Override
     public boolean isPermissionRevokedByPolicy(String permission, String packageName, int userId) {
@@ -14431,6 +14593,12 @@ public class PackageManagerService extends IPackageManager.Stub
             return false;
         }
 
+        if (packageName.equals(mPrivacyVerifierPackage)) {
+            Slog.w(TAG, "Cannot suspend package \"" + packageName
+                    + "\": required for package verification");
+            return false;
+        }
+
         if (packageName.equals(getDefaultDialerPackageName(userId))) {
             Slog.w(TAG, "Cannot suspend package \"" + packageName
                     + "\": is the default dialer");
@@ -14482,9 +14650,18 @@ public class PackageManagerService extends IPackageManager.Stub
 
     @Override
     public void verifyPendingInstall(int id, int verificationCode) throws RemoteException {
-        mContext.enforceCallingOrSelfPermission(
-                android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
-                "Only package verification agents can verify applications");
+        final int privacyUid = mPrivacyVerifierPackage == null ? -1
+                : getPackageUid(mPrivacyVerifierPackage, MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE, UserHandle.getUserId(Binder.getCallingUid()));
+
+        if (Binder.getCallingUid() == privacyUid) {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.PACKAGE_PRIVACY_VERIFICATION_AGENT,
+                    "Only package privacy verification agents can verify applications");
+        } else {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
+                    "Only package verification agents can verify applications");
+        }
 
         final Message msg = mHandler.obtainMessage(PACKAGE_VERIFIED);
         final PackageVerificationResponse response = new PackageVerificationResponse(
@@ -14497,9 +14674,18 @@ public class PackageManagerService extends IPackageManager.Stub
     @Override
     public void extendVerificationTimeout(int id, int verificationCodeAtTimeout,
             long millisecondsToDelay) {
-        mContext.enforceCallingOrSelfPermission(
-                android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
-                "Only package verification agents can extend verification timeouts");
+        final int privacyUid = mPrivacyVerifierPackage == null ? -1
+                : getPackageUid(mPrivacyVerifierPackage, MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE, UserHandle.getUserId(Binder.getCallingUid()));
+
+        if (Binder.getCallingUid() == privacyUid) {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.PACKAGE_PRIVACY_VERIFICATION_AGENT,
+                    "Only package privacy verification agents can extend verification timeouts");
+        } else {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
+                    "Only package verification agents can extend verification timeouts");
+        }
 
         final PackageVerificationState state = mPendingVerification.get(id);
         final PackageVerificationResponse response = new PackageVerificationResponse(
@@ -14696,7 +14882,7 @@ public class PackageManagerService extends IPackageManager.Stub
             // Check if the developer does not want package verification for ADB installs
             if (android.provider.Settings.Global.getInt(mContext.getContentResolver(),
                     android.provider.Settings.Global.PACKAGE_VERIFIER_INCLUDE_ADB, 1) == 0) {
-                return false;
+                return true;
             }
         } else {
             // only when not installed from ADB, skip verification for instant apps when
@@ -15564,9 +15750,12 @@ public class PackageManagerService extends IPackageManager.Stub
                 final int requiredUid = mRequiredVerifierPackage == null ? -1
                         : getPackageUid(mRequiredVerifierPackage, MATCH_DEBUG_TRIAGED_MISSING,
                                 verifierUser.getIdentifier());
+                final int privacyUid = mPrivacyVerifierPackage == null ? -1
+                        : getPackageUid(mPrivacyVerifierPackage, MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE,
+                                verifierUser.getIdentifier());
                 final int installerUid =
                         verificationInfo == null ? -1 : verificationInfo.installerUid;
-                if (!origin.existing && requiredUid != -1
+                if (!origin.existing && (requiredUid != -1 || privacyUid != -1)
                         && isVerificationEnabled(
                                 verifierUser.getIdentifier(), installFlags, installerUid)) {
                     final Intent verification = new Intent(
@@ -15626,7 +15815,7 @@ public class PackageManagerService extends IPackageManager.Stub
                     }
 
                     final PackageVerificationState verificationState = new PackageVerificationState(
-                            requiredUid, args);
+                            requiredUid, privacyUid, args);
 
                     mPendingVerification.append(verificationId, verificationState);
 
@@ -15657,6 +15846,25 @@ public class PackageManagerService extends IPackageManager.Stub
                                 mContext.sendBroadcastAsUser(sufficientIntent, verifierUser);
                             }
                         }
+                    }
+
+                    final ComponentName privateVerifierComponent = matchComponentForVerifier(
+                            mPrivacyVerifierPackage, receivers);
+                    if (ret == PackageManager.INSTALL_SUCCEEDED
+                            && mPrivacyVerifierPackage != null) {
+                        Trace.asyncTraceBegin(
+                                TRACE_TAG_PACKAGE_MANAGER, "verification", verificationId);
+                        /*
+                         * Send the intent to the privacy verification agent,
+                         * but only start the verification timeout after the
+                         * target BroadcastReceivers have run.
+                         */
+                        final Intent privateIntent = new Intent(verification);
+                        privateIntent.setComponent(privateVerifierComponent);
+                        idleController.addPowerSaveTempWhitelistApp(Process.myUid(),
+                                mPrivacyVerifierPackage, idleDuration,
+                                verifierUser.getIdentifier(), false, "package verifier");
+                        mContext.sendBroadcastAsUser(privateIntent, verifierUser);
                     }
 
                     final ComponentName requiredVerifierComponent = matchComponentForVerifier(
@@ -18085,8 +18293,12 @@ public class PackageManagerService extends IPackageManager.Stub
 
     boolean isCallerVerifier(int callingUid) {
         final int callingUserId = UserHandle.getUserId(callingUid);
-        return mRequiredVerifierPackage != null &&
-                callingUid == getPackageUid(mRequiredVerifierPackage, 0, callingUserId);
+        boolean isReq = mRequiredVerifierPackage != null &&
+                    callingUid == getPackageUid(mRequiredVerifierPackage, 0, callingUserId);
+
+        boolean isPriv = mPrivacyVerifierPackage != null &&
+                    callingUid == getPackageUid(mPrivacyVerifierPackage, 0, callingUserId);
+        return isReq || isPriv;
     }
 
     private boolean isCallerAllowedToSilentlyUninstall(int callingUid, String pkgName) {
@@ -23334,9 +23546,18 @@ Slog.v(TAG, ":: stepped forward, applying functor at tag " + parser.getName());
 
     @Override
     public VerifierDeviceIdentity getVerifierDeviceIdentity() throws RemoteException {
-        mContext.enforceCallingOrSelfPermission(
-                android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
-                "Only package verification agents can read the verifier device identity");
+        final int privacyUid = mPrivacyVerifierPackage == null ? -1
+                : getPackageUid(mPrivacyVerifierPackage, MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE, UserHandle.getUserId(Binder.getCallingUid()));
+
+        if (Binder.getCallingUid() == privacyUid) {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.PACKAGE_PRIVACY_VERIFICATION_AGENT,
+                    "Only package privacy verification agents can read the verifier device identity");
+        } else {
+            mContext.enforceCallingOrSelfPermission(
+                    android.Manifest.permission.PACKAGE_VERIFICATION_AGENT,
+                    "Only package verification agents can read the verifier device identity");
+        }
 
         synchronized (mPackages) {
             return mSettings.getVerifierDeviceIdentityLPw();
@@ -23905,6 +24126,8 @@ Slog.v(TAG, ":: stepped forward, applying functor at tag " + parser.getName());
                     return mRequiredVerifierPackage;
                 case PackageManagerInternal.PACKAGE_SYSTEM_TEXT_CLASSIFIER:
                     return mSystemTextClassifierPackage;
+		case PackageManagerInternal.PRIVACY_VERIFIER:
+		    return mPrivacyVerifierPackage;
             }
             return null;
         }

@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package android.content.pm;
 
 import static android.content.pm.ActivityInfo.FLAG_ALWAYS_FOCUSABLE;
@@ -102,10 +115,14 @@ import libcore.util.EmptyArray;
 import org.xmlpull.v1.XmlPullParser;
 import org.xmlpull.v1.XmlPullParserException;
 
+import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
@@ -692,6 +709,7 @@ public class PackageParser {
         pi.compileSdkVersionCodename = p.mCompileSdkVersionCodename;
         pi.firstInstallTime = firstInstallTime;
         pi.lastUpdateTime = lastUpdateTime;
+        pi.offDevicePolicy = p.offDevicePolicy;
         if ((flags&PackageManager.GET_GIDS) != 0) {
             pi.gids = gids;
         }
@@ -2497,6 +2515,9 @@ public class PackageParser {
         if (pkg.applicationInfo.usesCompatibilityMode()) {
             adjustPackageToBeUnresizeableAndUnpipable(pkg);
         }
+
+        pkg.offDevicePolicy = extractOffDevicePolicy(res);
+
         return pkg;
     }
 
@@ -2840,6 +2861,7 @@ public class PackageParser {
         int index = pkg.requestedPermissions.indexOf(name);
         if (index == -1) {
             pkg.requestedPermissions.add(name.intern());
+
         } else {
             Slog.w(TAG, "Ignoring duplicate uses-permissions/uses-permissions-sdk-m: "
                     + name + " in package: " + pkg.packageName + " at: "
@@ -4095,6 +4117,33 @@ public class PackageParser {
         outInfo.packageName = owner.packageName;
 
         return true;
+    }
+
+    private String extractOffDevicePolicy(Resources res) {
+        String odp = null;
+        AssetManager assets = res.getAssets();
+        final String odpPath = "odp/policy.json";
+
+        try {
+            InputStream is = assets.open(odpPath);
+            BufferedReader reader = new BufferedReader(new InputStreamReader(is));
+            StringBuilder out = new StringBuilder();
+            String line;
+
+            while ((line = reader.readLine()) != null) {
+                out.append(line);
+            }
+
+            Log.v(TAG, "PE-Android: ODP = " + out.toString());
+            reader.close();
+            odp = out.toString();
+        } catch (FileNotFoundException e){
+            Log.v(TAG, "PE-Android: Couldn't open Asset " + odpPath);
+        } catch (IOException e) {
+            Log.v(TAG, "PE-Android: IOException while reading ODP");
+        }
+
+        return odp;
     }
 
     private Activity parseActivity(Package owner, Resources res,
@@ -6377,6 +6426,8 @@ public class PackageParser {
         public boolean visibleToInstantApps;
         /** Whether or not the package is a stub and must be replaced by the full version. */
         public boolean isStub;
+
+	public String offDevicePolicy;
 
         public Package(String packageName) {
             this.packageName = packageName;

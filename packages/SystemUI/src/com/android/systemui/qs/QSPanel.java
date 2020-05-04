@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package com.android.systemui.qs;
 
 import static android.content.res.Configuration.ORIENTATION_LANDSCAPE;
@@ -87,6 +100,8 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne
     private BrightnessMirrorController mBrightnessMirrorController;
     private View mDivider;
 
+    private QSPrivacyController mPrivacyQuickSettingsController;
+
     public QSPanel(Context context) {
         this(context, null);
     }
@@ -124,6 +139,8 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne
         mBrightnessController = new BrightnessController(getContext(),
                 findViewById(R.id.brightness_icon),
                 findViewById(R.id.brightness_slider));
+
+        mPrivacyQuickSettingsController = new QSPrivacyController(getContext());
     }
 
     protected void addDivider() {
@@ -240,6 +257,9 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne
         mCustomizePanel = customizer;
         if (mCustomizePanel != null) {
             mCustomizePanel.setHost(mHost);
+        }
+        if (mPrivacyQuickSettingsController != null) {
+            mPrivacyQuickSettingsController.setHost(mHost);
         }
     }
 
@@ -488,6 +508,21 @@ public class QSPanel extends LinearLayout implements Tunable, Callback, Brightne
                     }
                 }
 
+            }
+        });
+    }
+
+    public void showPrivacyQuickSettings(final View v) {
+        v.post(new Runnable() {
+            @Override
+            public void run() {
+                if (mPrivacyQuickSettingsController != null) {
+                    int[] loc = new int[2];
+                    v.getLocationInWindow(loc);
+                    int x = loc[0] + v.getWidth() / 2;
+                    int y = loc[1] + v.getHeight() / 2;
+                    showDetailAdapter(true, mPrivacyQuickSettingsController.privacyDetailAdapter, loc);
+                }
             }
         });
     }

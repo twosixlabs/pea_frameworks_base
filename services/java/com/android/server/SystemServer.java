@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package com.android.server;
 
 import android.app.ActivityThread;
@@ -105,6 +118,8 @@ import com.android.server.pm.UserManagerService;
 import com.android.server.policy.PhoneWindowManager;
 import com.android.server.power.PowerManagerService;
 import com.android.server.power.ShutdownThread;
+import com.android.server.privacy.PermissionRequestService;
+import com.android.server.privacy.PrivacyManagerService;
 import com.android.server.restrictions.RestrictionsManagerService;
 import com.android.server.security.KeyAttestationApplicationIdProviderService;
 import com.android.server.security.KeyChainSystemService;
@@ -956,6 +971,7 @@ public final class SystemServer {
         LocationManagerService location = null;
         CountryDetectorService countryDetector = null;
         ILockSettings lockSettings = null;
+        PrivacyManagerService privacyManager = null;
         MediaRouterService mediaRouter = null;
 
         // Bring up services needed for UI.
@@ -1029,6 +1045,23 @@ public final class SystemServer {
             mPackageManagerService.performFstrimIfNeeded();
         } catch (Throwable e) {
             reportWtf("performing fstrim", e);
+        }
+        traceEnd();
+
+        traceBeginAndSlog("StartPrivacyManagerService");
+        try {
+            privacyManager = new PrivacyManagerService(context);
+            ServiceManager.addService("privacy_manager", privacyManager);
+        } catch (Throwable e) {
+            reportWtf("starting PrivacyManagerService running", e);
+        }
+        traceEnd();
+        traceBeginAndSlog("StartPermissionRequestService");
+        try {
+            PermissionRequestService permissionRequestService = new PermissionRequestService();
+            ServiceManager.addService("permission_request", permissionRequestService);
+        } catch (Throwable e) {
+            reportWtf("starting PermissionRequestService", e);
         }
         traceEnd();
 
@@ -1649,6 +1682,14 @@ public final class SystemServer {
             vibrator.systemReady();
         } catch (Throwable e) {
             reportWtf("making Vibrator Service ready", e);
+        }
+        traceEnd();
+
+        traceBeginAndSlog("MakePrivacyManagerServiceReady");
+        try {
+            if (privacyManager != null) privacyManager.systemReady();
+        } catch (Throwable e) {
+            reportWtf("making Privacy Manager Service ready", e);
         }
         traceEnd();
 

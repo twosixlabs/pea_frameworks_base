@@ -17,6 +17,19 @@
 ** limitations under the License.
 */
 -->
+
+<!--  This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+      Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+      Research Laboratory (AFRL).
+
+      The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+      computer software or computer software documentation marked with this legend. Any reproduction of
+      technical data, computer software, or portions thereof marked with this legend must also reproduce
+      this marking.
+
+      Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+-->
+
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="android" coreApp="true" android:sharedUserId="android.uid.system"
     android:sharedUserLabel="@string/android_system_label">
@@ -3543,6 +3556,11 @@
     <!-- @SystemApi @hide Package verifier needs to have this permission before the PackageManager will
          trust it to verify packages.
     -->
+    <permission android:name="android.permission.PACKAGE_PRIVACY_VERIFICATION_AGENT"
+            android:protectionLevel="normal" />
+    <!-- @SystemApi @hide Package verifier needs to have this permission before the PackageManager will
+         trust it to verify packages.
+    -->
     <permission android:name="android.permission.PACKAGE_VERIFICATION_AGENT"
         android:protectionLevel="signature|privileged" />
 
@@ -3660,6 +3678,13 @@
         @hide -->
     <permission android:name="android.permission.BIND_TRUST_AGENT"
         android:protectionLevel="signature" />
+
+    <permission android:name="android.permission.POLICY_MANAGER_SERVICE"
+        android:protectionLevel="signature" />
+
+    <permission android:name="android.permission.PRIVATE_DATA_PROVIDER_SERVICE"
+                android:protectionLevel="signature" />
+
 
     <!-- Must be required by an {@link
          android.service.notification.NotificationListenerService},

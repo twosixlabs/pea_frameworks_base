@@ -16,6 +16,18 @@
  * limitations under the License.
  */
 -->
+<!--
+   This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+   Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+   Research Laboratory (AFRL).
+  
+   The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+   computer software or computer software documentation marked with this legend. Any reproduction of
+   technical data, computer software, or portions thereof marked with this legend must also reproduce
+   this marking.
+  
+   Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ -->
 <resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
     <!-- Name of the status bar as seen in the applications info settings page. [CHAR LIMIT=12] -->
     <string name="app_label">System UI</string>
@@ -590,6 +602,9 @@
     <!-- Announcement made when the Data Saver changes to on (not shown on the screen). [CHAR LIMIT=NONE] -->
     <string name="accessibility_quick_settings_data_saver_changed_on">Data Saver turned on.</string>
 
+    <!-- Privacy -->
+    <string name="accessibility_quick_settings_privacy"> Privacy Settings </string>
+
     <!-- Content description of the display brightness slider (not shown on the screen). [CHAR LIMIT=NONE] -->
     <string name="accessibility_brightness">Display brightness</string>
 
@@ -729,6 +744,8 @@
     <string name="quick_settings_user_label">Me</string>
     <!-- QuickSettings: Title of the user detail panel [CHAR LIMIT=NONE] -->
     <string name="quick_settings_user_title">User</string>
+    <!-- QuickSettings: Title of the Privacy Settings panel [CHAR LIMIT=NONE] -->
+    <string name="quick_settings_privacy_title"> Privacy Quick Settings </string>
     <!-- QuickSettings: Label on the item for adding a new user [CHAR LIMIT=NONE] -->
     <string name="quick_settings_user_new_user">New user</string>
     <!-- QuickSettings: Wifi [CHAR LIMIT=NONE] -->

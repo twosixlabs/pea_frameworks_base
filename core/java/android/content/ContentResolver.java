@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package android.content;
 
 import android.accounts.Account;
@@ -51,6 +64,13 @@ import android.text.TextUtils;
 import android.util.EventLog;
 import android.util.Log;
 
+import android.os.Process;
+import android.privacy.IPermissionRequestManager;
+import android.provider.CallLog;
+import android.provider.CalendarContract;
+import android.provider.ContactsContract;
+import com.android.internal.privacy.PermissionRequest;
+
 import com.android.internal.util.MimeIconUtils;
 import com.android.internal.util.Preconditions;
 
@@ -68,6 +88,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static android.Manifest.permission.WRITE_CALL_LOG;
+import static android.Manifest.permission.WRITE_CALENDAR;
+import static android.Manifest.permission.WRITE_CONTACTS;
+import static android.Manifest.permission.WRITE_SMS;
+import static android.Manifest.permission.READ_CALL_LOG;
+import static android.Manifest.permission.READ_CALENDAR;
+import static android.Manifest.permission.READ_CONTACTS;
+import static android.Manifest.permission.READ_SMS;
 
 /**
  * This class provides applications access to the content model.
@@ -457,6 +486,9 @@ public abstract class ContentResolver {
           "internal-error",
     };
 
+    /* needed becauase android.provider.Telephony cannot be imported */
+    private static final String smsUri = "content://sms";
+
     /** @hide */
     public static String syncErrorToString(int error) {
         if (error < 1 || error > SYNC_ERROR_NAMES.length) {
@@ -800,6 +832,7 @@ public abstract class ContentResolver {
                 cancellationSignal.setRemote(remoteCancellationSignal);
             }
             try {
+                addStackTrace(uri, false);
                 qCursor = unstableProvider.query(mPackageName, uri, projection,
                         queryArgs, remoteCancellationSignal);
             } catch (DeadObjectException e) {
@@ -813,6 +846,8 @@ public abstract class ContentResolver {
                 }
                 qCursor = stableProvider.query(
                         mPackageName, uri, projection, queryArgs, remoteCancellationSignal);
+            } finally {
+                removeStackTrace(uri, false);
             }
             if (qCursor == null) {
                 return null;
@@ -1583,6 +1618,7 @@ public abstract class ContentResolver {
         if (provider == null) {
             throw new IllegalArgumentException("Unknown URL " + url);
         }
+        addStackTrace(url, true);
         try {
             long startTime = SystemClock.uptimeMillis();
             Uri createdRow = provider.insert(mPackageName, url, values);
@@ -1594,7 +1630,91 @@ public abstract class ContentResolver {
             // Manager will kill this process shortly anyway.
             return null;
         } finally {
+            removeStackTrace(url, true);
             releaseProvider(provider);
+        }
+    }
+
+    private void addStackTrace(Uri url, boolean writePerm) {
+        String urlString;
+        List<String> perms = new ArrayList<String>();
+
+        if (url == null)
+            return;
+        else
+            urlString = url.toString();
+
+        if (writePerm) {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(WRITE_CONTACTS);
+            } else if (urlString.startsWith(smsUri)) {
+                perms.add(WRITE_SMS);
+            }
+        } else {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(READ_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(READ_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(READ_CONTACTS);
+            } else if (urlString.startsWith(smsUri)) {
+                perms.add(READ_SMS);
+            }
+        }
+
+        if (perms.isEmpty()) {
+            return;
+        }
+
+        try {
+            PermissionRequest permissionRequest = new PermissionRequest(perms, Thread.currentThread().getPrivacyPurpose());
+            IPermissionRequestManager permissionRequestService = IPermissionRequestManager.Stub.asInterface(ServiceManager.getService("permission_request"));
+            permissionRequestService.add(permissionRequest);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void removeStackTrace(Uri url, boolean writePerm) {
+        String urlString;
+        List<String> perms = new ArrayList<String>();
+
+        if (url == null)
+            return;
+        else
+            urlString = url.toString();
+
+        if (writePerm) {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(WRITE_CONTACTS);
+            }
+        } else {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(READ_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(READ_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(READ_CONTACTS);
+            }
+        }
+
+        if (perms.isEmpty()) {
+            return;
+        }
+
+        try {
+            IPermissionRequestManager permissionRequestService = IPermissionRequestManager.Stub.asInterface(ServiceManager.getService("permission_request"));
+            permissionRequestService.remove(Process.myUid(), perms);
+        } catch (RemoteException e) {
+            e.printStackTrace();
         }
     }
 
@@ -1648,6 +1768,7 @@ public abstract class ContentResolver {
         if (provider == null) {
             throw new IllegalArgumentException("Unknown URL " + url);
         }
+        addStackTrace(url, true);
         try {
             long startTime = SystemClock.uptimeMillis();
             int rowsCreated = provider.bulkInsert(mPackageName, url, values);
@@ -1659,6 +1780,7 @@ public abstract class ContentResolver {
             // Manager will kill this process shortly anyway.
             return 0;
         } finally {
+            removeStackTrace(url, true);
             releaseProvider(provider);
         }
     }
@@ -1680,6 +1802,7 @@ public abstract class ContentResolver {
         if (provider == null) {
             throw new IllegalArgumentException("Unknown URL " + url);
         }
+        addStackTrace(url, true);
         try {
             long startTime = SystemClock.uptimeMillis();
             int rowsDeleted = provider.delete(mPackageName, url, where, selectionArgs);
@@ -1691,6 +1814,7 @@ public abstract class ContentResolver {
             // Manager will kill this process shortly anyway.
             return -1;
         } finally {
+            removeStackTrace(url, true);
             releaseProvider(provider);
         }
     }
@@ -1716,6 +1840,7 @@ public abstract class ContentResolver {
         if (provider == null) {
             throw new IllegalArgumentException("Unknown URI " + uri);
         }
+        addStackTrace(uri, true);
         try {
             long startTime = SystemClock.uptimeMillis();
             int rowsUpdated = provider.update(mPackageName, uri, values, where, selectionArgs);
@@ -1727,6 +1852,7 @@ public abstract class ContentResolver {
             // Manager will kill this process shortly anyway.
             return -1;
         } finally {
+            removeStackTrace(uri, true);
             releaseProvider(provider);
         }
     }

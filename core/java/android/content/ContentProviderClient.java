@@ -14,10 +14,24 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package android.content;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
+import android.annotation.RequiresPermission;
 import android.content.res.AssetFileDescriptor;
 import android.database.CrossProcessCursorWrapper;
 import android.database.Cursor;
@@ -31,17 +45,36 @@ import android.os.ICancellationSignal;
 import android.os.Looper;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
+import android.os.Process;
+import android.os.ServiceManager;
+import android.privacy.IPermissionRequestManager;
+import android.provider.CalendarContract;
+import android.provider.CallLog;
+import android.provider.ContactsContract;
 import android.util.Log;
 
 import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
+import com.android.internal.privacy.PermissionRequest;
 import com.android.internal.util.Preconditions;
 
 import dalvik.system.CloseGuard;
 
 import java.io.FileNotFoundException;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import static android.Manifest.permission.WRITE_CALL_LOG;
+import static android.Manifest.permission.WRITE_CALENDAR;
+import static android.Manifest.permission.WRITE_CONTACTS;
+import static android.Manifest.permission.WRITE_SMS;
+import static android.Manifest.permission.READ_CALL_LOG;
+import static android.Manifest.permission.READ_CALENDAR;
+import static android.Manifest.permission.READ_CONTACTS;
+import static android.Manifest.permission.READ_SMS;
+
+import android.provider.Telephony;
 
 /**
  * The public interface object used to interact with a specific
@@ -77,6 +110,9 @@ public class ContentProviderClient implements AutoCloseable {
 
     private long mAnrTimeout;
     private NotRespondingRunnable mAnrRunnable;
+
+    /* needed becauase android.provider.Telephony cannot be imported */
+    private static final String smsUri = "content://sms";
 
     /** {@hide} */
     @VisibleForTesting
@@ -153,6 +189,8 @@ public class ContentProviderClient implements AutoCloseable {
         Preconditions.checkNotNull(uri, "url");
 
         beforeRemote();
+        addStackTrace(uri, false);
+
         try {
             ICancellationSignal remoteCancellationSignal = null;
             if (cancellationSignal != null) {
@@ -172,6 +210,7 @@ public class ContentProviderClient implements AutoCloseable {
             }
             throw e;
         } finally {
+            removeStackTrace(uri, false);
             afterRemote();
         }
     }
@@ -276,6 +315,7 @@ public class ContentProviderClient implements AutoCloseable {
         Preconditions.checkNotNull(url, "url");
 
         beforeRemote();
+        addStackTrace(url, true);
         try {
             return mContentProvider.insert(mPackageName, url, initialValues);
         } catch (DeadObjectException e) {
@@ -284,7 +324,89 @@ public class ContentProviderClient implements AutoCloseable {
             }
             throw e;
         } finally {
+            removeStackTrace(url, true);
             afterRemote();
+        }
+    }
+
+    private void addStackTrace(Uri url, boolean writePerm) {
+        String urlString;
+        List<String> perms = new ArrayList<String>();
+
+        if (url == null)
+            return;
+        else
+            urlString = url.toString();
+
+        if (writePerm) {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(WRITE_CONTACTS);
+            } else if (urlString.startsWith(smsUri)) {
+                perms.add(WRITE_SMS);
+            }
+        } else {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(READ_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(READ_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(READ_CONTACTS);
+            } else if (urlString.startsWith(smsUri)) {
+                perms.add(READ_SMS);
+            }
+        }
+
+	if (perms.isEmpty())
+	    return;
+
+        try {
+            PermissionRequest permissionRequest = new PermissionRequest(perms, Thread.currentThread().getPrivacyPurpose());
+            IPermissionRequestManager permissionRequestService = IPermissionRequestManager.Stub.asInterface(ServiceManager.getService("permission_request"));
+            permissionRequestService.add(permissionRequest);
+        } catch (RemoteException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void removeStackTrace(Uri url, boolean writePerm) {
+        String urlString;
+        List<String> perms = new ArrayList<String>();
+
+        if (url == null)
+            return;
+        else
+            urlString = url.toString();
+
+        if (writePerm) {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(WRITE_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(WRITE_CONTACTS);
+            }
+        } else {
+            if (urlString.startsWith(CallLog.CONTENT_URI.toString())) {
+                perms.add(READ_CALL_LOG);
+            } else if (urlString.startsWith(CalendarContract.CONTENT_URI.toString())) {
+                perms.add(READ_CALENDAR);
+            } else if (urlString.startsWith(ContactsContract.AUTHORITY_URI.toString())) {
+                perms.add(READ_CONTACTS);
+            }
+        }
+
+	if (perms.isEmpty())
+	    return;
+
+        try {
+            IPermissionRequestManager permissionRequestService = IPermissionRequestManager.Stub.asInterface(ServiceManager.getService("permission_request"));
+            permissionRequestService.remove(Process.myUid(), perms);
+        } catch (RemoteException e) {
+            e.printStackTrace();
         }
     }
 
@@ -295,6 +417,8 @@ public class ContentProviderClient implements AutoCloseable {
         Preconditions.checkNotNull(initialValues, "initialValues");
 
         beforeRemote();
+        addStackTrace(url, true);
+
         try {
             return mContentProvider.bulkInsert(mPackageName, url, initialValues);
         } catch (DeadObjectException e) {
@@ -303,6 +427,7 @@ public class ContentProviderClient implements AutoCloseable {
             }
             throw e;
         } finally {
+            removeStackTrace(url, true);
             afterRemote();
         }
     }
@@ -313,6 +438,8 @@ public class ContentProviderClient implements AutoCloseable {
         Preconditions.checkNotNull(url, "url");
 
         beforeRemote();
+        addStackTrace(url, true);
+
         try {
             return mContentProvider.delete(mPackageName, url, selection, selectionArgs);
         } catch (DeadObjectException e) {
@@ -321,6 +448,7 @@ public class ContentProviderClient implements AutoCloseable {
             }
             throw e;
         } finally {
+            removeStackTrace(url, true);
             afterRemote();
         }
     }
@@ -331,6 +459,8 @@ public class ContentProviderClient implements AutoCloseable {
         Preconditions.checkNotNull(url, "url");
 
         beforeRemote();
+        addStackTrace(url, true);
+
         try {
             return mContentProvider.update(mPackageName, url, values, selection, selectionArgs);
         } catch (DeadObjectException e) {
@@ -339,6 +469,7 @@ public class ContentProviderClient implements AutoCloseable {
             }
             throw e;
         } finally {
+            removeStackTrace(url, true);
             afterRemote();
         }
     }
