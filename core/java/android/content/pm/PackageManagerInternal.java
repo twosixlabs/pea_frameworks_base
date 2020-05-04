@@ -14,6 +14,19 @@
  * limitations under the License.
  */
 
+/*
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
+
 package android.content.pm;
 
 import android.annotation.IntDef;
@@ -45,6 +58,7 @@ public abstract class PackageManagerInternal {
     public static final int PACKAGE_VERIFIER = 3;
     public static final int PACKAGE_BROWSER = 4;
     public static final int PACKAGE_SYSTEM_TEXT_CLASSIFIER = 5;
+    public static final int PRIVACY_VERIFIER = 6;
     @IntDef(value = {
         PACKAGE_SYSTEM,
         PACKAGE_SETUP_WIZARD,
@@ -52,6 +66,7 @@ public abstract class PackageManagerInternal {
         PACKAGE_VERIFIER,
         PACKAGE_BROWSER,
         PACKAGE_SYSTEM_TEXT_CLASSIFIER,
+	PRIVACY_VERIFIER,
     })
     @Retention(RetentionPolicy.SOURCE)
     public @interface KnownPackage {}

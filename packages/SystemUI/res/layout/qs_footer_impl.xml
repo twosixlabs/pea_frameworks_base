@@ -15,6 +15,19 @@
 ** limitations under the License.
 -->
 
+<!--
+** This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+** Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+** Research Laboratory (AFRL).
+**
+** The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+** computer software or computer software documentation marked with this legend. Any reproduction of
+** technical data, computer software, or portions thereof marked with this legend must also reproduce
+** this marking.
+**
+** Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ -->
+
 <!-- Extends FrameLayout -->
 <com.android.systemui.qs.QSFooterImpl
     xmlns:android="http://schemas.android.com/apk/res/android"
@@ -109,6 +122,19 @@
                 android:focusable="true"
                 android:padding="15dp"
                 android:src="@drawable/ic_mode_edit"
+                android:tint="?android:attr/colorForeground"/>
+
+            <com.android.systemui.statusbar.AlphaOptimizedImageView
+                android:id="@+id/privacy_button"
+                android:layout_width="48dp"
+                android:layout_height="48dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:clipToPadding="false"
+                android:contentDescription="@string/accessibility_quick_settings_privacy"
+                android:focusable="true"
+                android:padding="15dp"
+                android:src="@drawable/ic_privacy_16dp"
                 android:tint="?android:attr/colorForeground"/>
 
             <com.android.systemui.statusbar.AlphaOptimizedFrameLayout

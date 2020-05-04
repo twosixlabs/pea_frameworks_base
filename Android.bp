@@ -12,6 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+// Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+// Research Laboratory (AFRL).
+//
+// The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+// computer software or computer software documentation marked with this legend. Any reproduction of
+// technical data, computer software, or portions thereof marked with this legend must also reproduce
+// this marking.
+//
+// Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+
 // Build the master framework library.
 
 // READ ME: ########################################################
@@ -26,7 +37,7 @@
 // READ ME: ########################################################
 
 java_library {
-    name: "framework",
+    name: "framework.unwoven",
 
     srcs: [
         // From build/make/core/pathmap.mk FRAMEWORK_BASE_SUBDIRS
@@ -296,10 +307,12 @@ java_library {
         "core/java/android/print/IWriteResultCallback.aidl",
         "core/java/android/printservice/IPrintService.aidl",
         "core/java/android/printservice/IPrintServiceClient.aidl",
+        "core/java/android/privacy/IPermissionRequestManager.aidl",
         "core/java/android/companion/ICompanionDeviceManager.aidl",
         "core/java/android/companion/ICompanionDeviceDiscoveryService.aidl",
         "core/java/android/companion/ICompanionDeviceDiscoveryServiceCallback.aidl",
         "core/java/android/companion/IFindDeviceCallback.aidl",
+        "core/java/android/policymanager/IPolicyManager.aidl",
         "core/java/android/service/dreams/IDreamManager.aidl",
         "core/java/android/service/dreams/IDreamService.aidl",
         "core/java/android/service/oemlock/IOemLockService.aidl",
@@ -379,6 +392,7 @@ java_library {
         "core/java/com/android/internal/policy/IKeyguardService.aidl",
         "core/java/com/android/internal/policy/IKeyguardStateCallback.aidl",
         "core/java/com/android/internal/policy/IShortcutService.aidl",
+        "core/java/com/android/internal/privacy/IPrivacyManager.aidl" ,
         "core/java/com/android/internal/os/IDropBoxManagerService.aidl",
         "core/java/com/android/internal/os/IParcelFileDescriptorFactory.aidl",
         "core/java/com/android/internal/os/IResultReceiver.aidl",
@@ -693,6 +707,31 @@ java_library {
         "--core-library",
         "--multi-dex",
     ],
+}
+
+java_genrule {
+    name: "framework.woven",
+    srcs: [
+	":framework.unwoven",
+    ],
+    tools: ["aspectj"],
+    cmd: "$(location aspectj) " +
+        " -Xmx1024M -source 1.8 -target 1.8 " +
+	" -encoding UTF-8 " +
+	" -injars $(in) " +
+	" -classpath external/aspectj/lib/aspectjrt.jar " +
+	" -bootclasspath out/soong/.intermediates/libcore/core-all/android_common/turbine-combined/core-all.jar " +
+	" -extdirs \"\" " +
+	" -outjar $(out) " +
+	" -showWeaveInfo " +
+	" frameworks/base/tools/requires_permission_code_injection/src/com/twosixlabs/requirespermissioncodeinjection/RequiresPermissionAspect.java",
+    out: ["framework.woven.jar"],
+}
+
+java_library {
+    name: "framework",
+    no_framework_libs: true,
+    static_libs: ["framework.woven", "aspectjrt"],
 }
 
 // A temporary build target that is conditionally included on the bootclasspath if

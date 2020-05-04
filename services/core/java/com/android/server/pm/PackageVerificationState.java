@@ -35,6 +35,8 @@ class PackageVerificationState {
 
     private final int mRequiredVerifierUid;
 
+    private final int mPrivacyVerifierUid;
+
     private boolean mSufficientVerificationComplete;
 
     private boolean mSufficientVerificationPassed;
@@ -42,6 +44,10 @@ class PackageVerificationState {
     private boolean mRequiredVerificationComplete;
 
     private boolean mRequiredVerificationPassed;
+
+    private boolean mPrivacyVerificationComplete;
+
+    private boolean mPrivacyVerificationPassed;
 
     private boolean mExtendedTimeout;
 
@@ -53,8 +59,9 @@ class PackageVerificationState {
      * @param requiredVerifierUid user ID of required package verifier
      * @param args
      */
-    public PackageVerificationState(int requiredVerifierUid, InstallArgs args) {
+    public PackageVerificationState(int requiredVerifierUid, int privacyVerifierUid, InstallArgs args) {
         mRequiredVerifierUid = requiredVerifierUid;
+        mPrivacyVerifierUid = privacyVerifierUid;
         mArgs = args;
         mSufficientVerifierUids = new SparseBooleanArray();
         mExtendedTimeout = false;
@@ -94,6 +101,16 @@ class PackageVerificationState {
                     mRequiredVerificationPassed = false;
             }
             return true;
+        } else if (uid == mPrivacyVerifierUid) {
+            mPrivacyVerificationComplete = true;
+            switch (code) {
+                case PackageManager.VERIFICATION_ALLOW:
+                    mPrivacyVerificationPassed = true;
+                    break;
+                default:
+                    mPrivacyVerificationPassed = false;
+           }
+           return true;
         } else {
             if (mSufficientVerifierUids.get(uid)) {
                 if (code == PackageManager.VERIFICATION_ALLOW) {
@@ -125,6 +142,10 @@ class PackageVerificationState {
             return false;
         }
 
+        if (!mPrivacyVerificationComplete) {
+            return false;
+        }
+
         if (mSufficientVerifierUids.size() == 0) {
             return true;
         }
@@ -140,6 +161,10 @@ class PackageVerificationState {
      */
     public boolean isInstallAllowed() {
         if (!mRequiredVerificationPassed) {
+            return false;
+        }
+
+        if (!mPrivacyVerificationPassed) {
             return false;
         }
 

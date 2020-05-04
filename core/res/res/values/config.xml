@@ -17,6 +17,19 @@
 */
 -->
 
+<!--  This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+      Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+      Research Laboratory (AFRL).
+
+      The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+      computer software or computer software documentation marked with this legend. Any reproduction of
+      technical data, computer software, or portions thereof marked with this legend must also reproduce
+      this marking.
+
+      Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+-->
+
+
 <!-- These resources are around just to allow their values to be customized
      for different hardware and product builds.  Do not translate.
 
@@ -1714,6 +1727,7 @@
     <string-array name="config_locationProviderPackageNames" translatable="false">
         <!-- The standard AOSP fused location provider -->
         <item>com.android.location.fused</item>
+        <item>com.google.android.gms</item>
     </string-array>
 
     <!-- This string array can be overriden to enable test location providers initially. -->

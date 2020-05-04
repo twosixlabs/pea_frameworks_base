@@ -13,6 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+
+ * This work was modified by Two Six Labs, LLC and is sponsored by a subcontract agreement with
+ * Raytheon BBN Technologies Corp. under Prime Contract No. FA8750-16-C-0006 with the Air Force
+ * Research Laboratory (AFRL).
+ *
+ * The Government has unlimited rights to use, modify, reproduce, release, perform, display, or disclose
+ * computer software or computer software documentation marked with this legend. Any reproduction of
+ * technical data, computer software, or portions thereof marked with this legend must also reproduce
+ * this marking.
+ *
+ * Copyright (C) 2020 Two Six Labs, LLC.  All rights reserved.
+ */
 
 package android.content.pm;
 
@@ -566,6 +579,13 @@ public abstract class PackageManager {
      * if the permission has not been granted to the given package.
      */
     public static final int PERMISSION_DENIED = -1;
+
+    /**
+     * Policy check result: this is returned by {@link #checkPolicy}
+     * if no policy manager is active or installed.
+     * @hide
+     */
+    public static final int PERMISSION_NO_POLICY_MANAGER = -2;
 
     /** @hide */
     @IntDef(prefix = { "SIGNATURE_" }, value = {
