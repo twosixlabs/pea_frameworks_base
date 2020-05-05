@@ -26,9 +26,11 @@
 package com.android.server.privacy;
 
 import android.Manifest;
+import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -64,6 +66,9 @@ public class PrivacyManagerService extends IPrivacyManager.Stub {
 
     public PrivacyManagerService(Context context) {
         mContext = context;
+
+        final IntentFilter BOOT_FILTER = new IntentFilter(Intent.ACTION_BOOT_COMPLETED);
+        context.getApplicationContext().registerReceiver(BOOT_RECEIVER, BOOT_FILTER);
     }
 
     public void systemReady() {
@@ -97,7 +102,7 @@ public class PrivacyManagerService extends IPrivacyManager.Stub {
                 mPolicyManagerServiceLatch.await(3, TimeUnit.SECONDS);
                 mPolicyManagerServiceConnection = newServiceConnection;
                 mContext.unbindService(oldServiceConnection);
-            } catch (InterruptedException e) {
+            } catch (InterruptedException | IllegalArgumentException e) {
                 e.printStackTrace();
             }
         }
@@ -295,4 +300,11 @@ public class PrivacyManagerService extends IPrivacyManager.Stub {
             }
         }
     }
+
+    private final BroadcastReceiver BOOT_RECEIVER = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            systemReady();
+        }
+    };
 }
