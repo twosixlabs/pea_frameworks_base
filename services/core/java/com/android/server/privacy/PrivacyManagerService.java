@@ -87,8 +87,15 @@ public class PrivacyManagerService extends IPrivacyManager.Stub {
             try {
                 mPolicyManagerServiceLatch.await(3, TimeUnit.SECONDS);
                 mPolicyManagerServiceConnection = newServiceConnection;
+                Log.i(TAG, "Successfully bound mPolicyManagerServiceConnection");
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+
+            try {
                 mContext.unbindService(oldServiceConnection);
-            } catch (InterruptedException | IllegalArgumentException e) {
+            } catch(IllegalArgumentException e) {
+                Log.w(TAG, "Attempted to unbind an already-unbound oldServiceConnection");
                 e.printStackTrace();
             }
         }
