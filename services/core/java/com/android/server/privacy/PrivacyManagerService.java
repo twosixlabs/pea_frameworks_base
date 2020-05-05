@@ -66,25 +66,11 @@ public class PrivacyManagerService extends IPrivacyManager.Stub {
 
     public PrivacyManagerService(Context context) {
         mContext = context;
-
-        final IntentFilter BOOT_FILTER = new IntentFilter(Intent.ACTION_BOOT_COMPLETED);
-        context.getApplicationContext().registerReceiver(BOOT_RECEIVER, BOOT_FILTER);
     }
 
     public void systemReady() {
-        ComponentName manager = getCurrentManagerName();
-
-        if (manager == null) {
-            manager = setDefaultPrivacyManager();
-        }
-
-        if (manager != null) {
-            mPolicyManagerServiceConnection = new PolicyManagerServiceConnection();
-            bindToService(createIntent(manager));
-        }
-        else {
-            Log.d(TAG, "No policy manager on device");
-        }
+        final IntentFilter BOOT_FILTER = new IntentFilter(Intent.ACTION_BOOT_COMPLETED);
+        mContext.getApplicationContext().registerReceiver(BOOT_RECEIVER, BOOT_FILTER);
     }
 
     private void bindToService(Intent intent) {
@@ -304,7 +290,19 @@ public class PrivacyManagerService extends IPrivacyManager.Stub {
     private final BroadcastReceiver BOOT_RECEIVER = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            systemReady();
+            ComponentName manager = getCurrentManagerName();
+
+            if (manager == null) {
+                manager = setDefaultPrivacyManager();
+            }
+
+            if (manager != null) {
+                mPolicyManagerServiceConnection = new PolicyManagerServiceConnection();
+                bindToService(createIntent(manager));
+            }
+            else {
+                Log.d(TAG, "No policy manager on device");
+            }
         }
     };
 }
